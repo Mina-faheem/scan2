@@ -17,5 +17,5 @@ jobs:
         with:
           scan-type: "fs"
           scan-ref: .
-          format: 'template'
+          format: 'table'
           template: "@$HOME/.local/bin/trivy-bin/contrib/html.tpl"
