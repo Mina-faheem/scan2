@@ -1,0 +1,78 @@
+
+name: Trivy Full Scan
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  schedule:
+    - cron: '0 0 * * *'  # Daily scan at midnight UTC
+
+jobs:
+  trivy-scan:
+    name: Trivy Full Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Docker image
+        run: docker build -t my-app:${{ github.sha }} .
+
+      - name: Run Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: 'my-app:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
+
+      - name: Run Trivy SBOM scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: 'my-app:${{ github.sha }}'
+          scan-type: 'image'
+          format: 'table'
+          output: 'trivy-sbom.txt'
+          sbom: 'true'
+
+      - name: Run Trivy license scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: 'my-app:${{ github.sha }}'
+          scan-type: 'image'
+          format: 'table'
+          output: 'trivy-license.txt'
+          license-full: true
+
+      - name: Run Trivy misconfiguration scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'config'
+          format: 'table'
+          output: 'trivy-config.txt'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+
+      - name: Run Trivy secret scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'secret'
+          format: 'table'
+          output: 'trivy-secrets.txt'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy Reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: trivy-reports
+          path: |
+            trivy-sbom.txt
+            trivy-license.txt
+            trivy-config.txt
+            trivy-secrets.txt
