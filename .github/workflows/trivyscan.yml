@@ -1,53 +1,68 @@
-
-name: Trivy Security Scan for NGINX
+name: Trivy Full Project Scan 2
 
 on:
   push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
+  schedule:
+    - cron: '0 0 * * *'  # Daily scan at midnight UTC
 
 jobs:
-  build:
-    name: Scan nginx:latest with Trivy
+  trivy-project-scan:
+    name: Trivy Full Project Security Scan
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Set Date
-        id: set-date
-        run: echo "DATE=$(date +%m.%d.%Y)" >> $GITHUB_ENV
+      - name: Run Trivy vulnerability scan on filesystem
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          format: 'table'
+          output: 'trivy-vuln.txt'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW,UNKNOWN'
 
-      - name: Create output directory
-        run: mkdir -p "GitHub Actions/Trivy Automation"
+      - name: Run Trivy misconfiguration scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'config'
+          format: 'table'
+          output: 'trivy-config.txt'
+          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
 
-      - name: Install Trivy
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin v0.57.0
+      - name: Run Trivy secret scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'secret'
+          format: 'table'
+          output: 'trivy-secrets.txt'
+          severity: 'CRITICAL,HIGH'
 
-      - name: Log in to GitHub Container Registry
-        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Run Trivy license scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          format: 'table'
+          output: 'trivy-license.txt'
+          license-full: true
 
-      - name: Download Trivy vulnerability database
-        run: trivy image --download-db-only
+      - name: Run Trivy SBOM scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          format: 'table'
+          output: 'trivy-sbom.txt'
+          sbom: 'true'
 
-      - name: Run Trivy vulnerability scanner and show results
-        run: |
-          OUTPUT_FILE="GitHub Actions/Trivy Automation/scan-results-${DATE}.json"
-          echo "🔍 Running Trivy scan on nginx:latest..."
-          trivy image --format json --ignore-unfixed --vuln-type os,library --severity CRITICAL,HIGH,MEDIUM,LOW -o "$OUTPUT_FILE" nginx:latest
-          echo "📄 Scan results saved to $OUTPUT_FILE"
-          echo "🧾 Displaying scan results:"
-          cat "$OUTPUT_FILE"
-
-      - name: Upload Trivy scan results
+      - name: Upload Trivy Reports
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-scan-${{ env.DATE }}
-          path: GitHub Actions/Trivy Automation/scan-results-${{ env.DATE }}.json
+          name: trivy-reports
+          path: |
+            trivy-vuln.txt
+            trivy-config.txt
+            trivy-secrets.txt
+            trivy-license.txt
+            trivy-sbom.txt
